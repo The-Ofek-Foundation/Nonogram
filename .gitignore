@@ -30,3 +30,9 @@
 *.exe
 *.out
 *.app
+
+# Ofek
+.sublime-project
+.sublime-workspace
+.vscode/
+bin/
