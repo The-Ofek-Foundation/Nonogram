@@ -41,7 +41,7 @@
 
 // 	unsigned solve(bool do_row) noexcept;
 //	unsigned solve(bool do_row, unsigned index) noexcept;
-//	unsigned solve(std::vector<State>& aisle, const std::vector<unsigned>& clues, std::vector<FilledEmptyPair>& aisle_pairs, unsigned index = 0u, unsigned clue_on = 0u, unsigned num_consecutive = 0u) noexcept;
+//	unsigned solve(const GetState& get_state, const std::vector<unsigned>& clues, std::vector<FilledEmptyPair>& aisle_pairs, unsigned aisle_length, unsigned index = 0u, unsigned clue_on = 0u, unsigned num_consecutive = 0u) noexcept;
 // };
 
 // std::ostream operator<<(std::ostream& out, const Nonogram& nonogram) noexcept;
@@ -144,22 +144,26 @@ unsigned Nonogram::solve(bool do_row, unsigned index) noexcept
 	unsigned y = do_row ? 0u : index;
 	const std::vector<unsigned>& clues = do_row ? _row_clues[index] : _col_clues[index];
 
-	std::vector<State> aisle(do_row ? _board.size() : _board[0].size());
-	std::vector<FilledEmptyPair> aisle_pairs(aisle.size());
+	unsigned aisle_length = do_row ? _board.size() : _board[0].size();
+	std::vector<FilledEmptyPair> aisle_pairs(aisle_length);
 
-	// fill the aisle
-	for (unsigned i = 0u; i < aisle.size(); ++i)
+	GetState get_state;
+	if (do_row)
 	{
-		aisle[i] = _board[x + (do_row ? 0u : i)][y + (do_row ? i : 0u)];
+		get_state = [&](unsigned i) { return _board[x][i]; };
+	}
+	else
+	{
+		get_state = [&](unsigned i) { return _board[i][y]; };
 	}
 
 	// solve the aisle
-	unsigned num_solutions = solve(aisle, clues, aisle_pairs);
+	unsigned num_solutions = solve(get_state, clues, aisle_pairs, aisle_length);
 
 	// update the board
-	for (unsigned i = 0u; i < aisle.size(); ++i)
+	for (unsigned i = 0u; i < aisle_length; ++i)
 	{
-		if (aisle[i] != State::UNKNOWN)
+		if (get_state(i) != State::UNKNOWN)
 		{
 			continue;
 		}
@@ -179,20 +183,20 @@ unsigned Nonogram::solve(bool do_row, unsigned index) noexcept
 	return num_solutions;
 }
 
-unsigned Nonogram::solve(std::vector<State>& aisle, const std::vector<unsigned>& clues, std::vector<FilledEmptyPair>& aisle_pairs, unsigned index, unsigned clue_on, unsigned num_consecutive) noexcept
+unsigned Nonogram::solve(const GetState& get_state, const std::vector<unsigned>& clues, std::vector<FilledEmptyPair>& aisle_pairs, unsigned aisle_length, unsigned index, unsigned clue_on, unsigned num_consecutive) noexcept
 {
 	// base cases
 	if (clue_on == clues.size())
 	{
-		for (unsigned i = index; i < aisle.size(); ++i)
+		for (unsigned i = index; i < aisle_length; ++i)
 		{
-			if (aisle[i] == State::FILLED)
+			if (get_state(i) == State::FILLED)
 			{
 				return 0u;
 			}
 		}
 
-		for (unsigned i = index; i < aisle.size(); ++i)
+		for (unsigned i = index; i < aisle_length; ++i)
 		{
 			aisle_pairs[i].always_filled = false;
 		}
@@ -200,42 +204,43 @@ unsigned Nonogram::solve(std::vector<State>& aisle, const std::vector<unsigned>&
 		return 1u;
 	}
 
-	if (index == aisle.size())
+	if (index == aisle_length)
 	{
 		return (clue_on == clues.size() - 1u && num_consecutive == clues[clue_on]) ? 1u : 0u;
 	}
 
 	// enforce previous knowledge
-	if (aisle[index] != State::UNKNOWN)
+	const State& state = get_state(index);
+	if (state != State::UNKNOWN)
 	{
 		if (num_consecutive == clues[clue_on])
 		{
-			if (aisle[index] == State::FILLED)
+			if (state == State::FILLED)
 			{
 				return 0u;
 			}
 		}
 		else if (num_consecutive > 0u)
 		{
-			if (aisle[index] == State::EMPTY)
+			if (state == State::EMPTY)
 			{
 				return 0u;
 			}
 		}
-		else if (aisle[index] == State::FILLED)
+		else if (state == State::FILLED)
 		{
-			return solve(aisle, clues, aisle_pairs, index + 1u, clue_on, 1u);
+			return solve(get_state, clues, aisle_pairs, aisle_length, index + 1u, clue_on, 1u);
 		}
 		else
 		{
-			return solve(aisle, clues, aisle_pairs, index + 1u, clue_on, 0u);
+			return solve(get_state, clues, aisle_pairs, aisle_length, index + 1u, clue_on, 0u);
 		}
 	}
 
 	// recursive case
 	if (num_consecutive == clues[clue_on])
 	{
-		unsigned num_solutions = solve(aisle, clues, aisle_pairs, index + 1u, clue_on + 1u, 0u);
+		unsigned num_solutions = solve(get_state, clues, aisle_pairs, aisle_length, index + 1u, clue_on + 1u, 0u);
 		if (num_solutions > 0u)
 		{
 			aisle_pairs[index].always_filled = false;
@@ -245,7 +250,7 @@ unsigned Nonogram::solve(std::vector<State>& aisle, const std::vector<unsigned>&
 
 	if (num_consecutive > 0u)
 	{
-		unsigned num_solutions = solve(aisle, clues, aisle_pairs, index + 1u, clue_on, num_consecutive + 1u);
+		unsigned num_solutions = solve(get_state, clues, aisle_pairs, aisle_length, index + 1u, clue_on, num_consecutive + 1u);
 		if (num_solutions > 0u)
 		{
 			aisle_pairs[index].always_empty = false;
@@ -254,8 +259,8 @@ unsigned Nonogram::solve(std::vector<State>& aisle, const std::vector<unsigned>&
 	}
 
 	// multiple options
-	unsigned num_solutions_empty = solve(aisle, clues, aisle_pairs, index + 1u, clue_on, 0u);
-	unsigned num_solutions_filled = solve(aisle, clues, aisle_pairs, index + 1u, clue_on, 1u);
+	unsigned num_solutions_empty = solve(get_state, clues, aisle_pairs, aisle_length, index + 1u, clue_on, 0u);
+	unsigned num_solutions_filled = solve(get_state, clues, aisle_pairs, aisle_length, index + 1u, clue_on, 1u);
 
 	if (num_solutions_empty > 0u)
 	{

@@ -1,6 +1,7 @@
 #ifndef NONOGRAM_HPP
 #define NONOGRAM_HPP
 
+#include <functional>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -23,6 +24,8 @@ struct SolveReturn
 	unsigned num_solutions;
 };
 
+typedef std::function<State(unsigned)> GetState;
+
 class Nonogram
 {
 public:
@@ -42,7 +45,7 @@ private:
 	unsigned remaining_squares;
 
 	
-	unsigned solve(std::vector<State>& aisle, const std::vector<unsigned>& clues, std::vector<FilledEmptyPair>& aisle_pairs, unsigned index = 0u, unsigned clue_on = 0u, unsigned num_consecutive = 0u) noexcept;
+	unsigned solve(const GetState& get_state, const std::vector<unsigned>& clues, std::vector<FilledEmptyPair>& aisle_pairs, unsigned aisle_length, unsigned index = 0u, unsigned clue_on = 0u, unsigned num_consecutive = 0u) noexcept;
 };
 
 std::ostream& operator<<(std::ostream& out, const Nonogram& nonogram) noexcept;
